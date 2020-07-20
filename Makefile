@@ -4,6 +4,7 @@ TOOL_BIN := $(PWD)/bin
 GOLINT := $(TOOL_BIN)/golint
 GOIMPORTS := $(TOOL_BIN)/goimports
 ENUMER := $(TOOL_BIN)/enumer
+GO_BINDATA := $(TOOL_BIN)/go-bindata
 
 ARCHITECTURES=386 amd64
 PLATFORMS=darwin linux windows
@@ -34,6 +35,9 @@ $(GOLINT):
 $(GOIMPORTS):
 	@GOBIN=$(TOOL_BIN) go install golang.org/x/tools/cmd/goimports
 
+$(GO_BINDATA):
+	@GOBIN=$(TOOL_BIN) go install github.com/go-bindata/go-bindata/...
+
 .PHONY: test
 test: ## Tests all the project
 	@go test ./...
@@ -43,7 +47,7 @@ lint: $(GOLINT) $(GOIMPORTS) ## Runs the linter
 	@$(GOLINT) -set_exit_status ./... && test -z "`go list -f {{.Dir}} ./... | xargs $(GOIMPORTS) -l | tee /dev/stderr`"
 
 .PHONY: generate
-generate: $(ENUMER) ## Generates the needed code
+generate: $(ENUMER) $(GO_BINDATA) ## Generates the needed code
 	@go generate ./...
 
 .PHONY: build
