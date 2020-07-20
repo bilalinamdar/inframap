@@ -4,9 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
+	"path"
 
+	"github.com/adrg/xdg"
 	"github.com/awalterschulze/gographviz"
+	"github.com/cycloidio/inframap/assets"
 	"github.com/cycloidio/inframap/graph"
+	"github.com/cycloidio/inframap/printer"
 	"github.com/cycloidio/inframap/provider"
 	"github.com/cycloidio/inframap/provider/factory"
 )
@@ -16,7 +21,7 @@ import (
 type Dot struct{}
 
 // Print prints into w the g in DOT format
-func (d Dot) Print(g *graph.Graph, w io.Writer) error {
+func (d Dot) Print(g *graph.Graph, opt printer.Options, w io.Writer) error {
 	graph := gographviz.NewGraph()
 	parentName := "G"
 	graph.SetName(parentName)
@@ -33,14 +38,52 @@ func (d Dot) Print(g *graph.Graph, w io.Writer) error {
 		if pv == nil {
 			pv = provider.RawProvider{}
 		}
-		shape := "ellipse"
-		if pv.IsEdge(rs) {
-			shape = "rectangle"
+		attr := map[string]string{
+			"shape": "ellipse",
 		}
-		graph.AddNode(parentName, fmt.Sprintf("%q", n.Canonical), map[string]string{
-			"shape": shape,
-		})
+		if pv.IsEdge(rs) {
+			attr["shape"] = "rectangle"
+		}
+
+		if opt.ShowIcons && n.Resource.Icon != "" {
+			ext := path.Ext(n.Resource.Icon)
+			pngIcon := fmt.Sprintf("%s.png", n.Resource.Icon[0:len(n.Resource.Icon)-len(ext)])
+			assetPath := path.Join("inframap", "assets", pv.Type().String(), pngIcon)
+			pathIcon := path.Join(xdg.CacheHome, assetPath)
+
+			attr["image"] = fmt.Sprintf("%q", pathIcon)
+			attr["shape"] = "plaintext"
+			attr["labelloc"] = "b"
+			attr["height"] = "1.15"
+
+			// If the file does not exists on the Cache path, we have to write it,
+			// if not it means it's already correct so nothing to be done
+			if _, err := os.Stat(pathIcon); os.IsNotExist(err) {
+				p, err := xdg.CacheFile(assetPath)
+				if err != nil {
+					return err
+				}
+
+				f, err := os.Create(p)
+				if err != nil {
+					return err
+				}
+
+				icon, err := assets.Asset(path.Join(pv.Type().String(), pngIcon))
+				if err != nil {
+					return err
+				}
+
+				_, err = f.Write(icon)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		graph.AddNode(parentName, fmt.Sprintf("%q", n.Canonical), attr)
 	}
+
 	for _, e := range g.Edges {
 		src, _ := g.GetNodeByID(e.Source)
 		tr, _ := g.GetNodeByID(e.Target)
